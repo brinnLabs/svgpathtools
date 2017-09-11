@@ -10,6 +10,8 @@ from collections import MutableSequence
 from warnings import warn
 from operator import itemgetter
 import numpy as np
+from .point import *
+
 try:
     from scipy.integrate import quad
     _quad_available = True
@@ -258,8 +260,8 @@ def segment_curvature(self, t, use_inf=False):
 
     dz = self.derivative(t)
     ddz = self.derivative(t, n=2)
-    dx, dy = dz.real, dz.imag
-    ddx, ddy = ddz.real, ddz.imag
+    dx, dy = dz.x, dz.y
+    ddx, ddy = ddz.x, ddz.y
     old_np_seterr = np.seterr(invalid='raise')
     try:
         kappa = abs(dx*ddy - dy*ddx)/sqrt(dx*dx + dy*dy)**3
@@ -566,10 +568,10 @@ class Line(object):
             assert self != other_seg
             # Solve the system [p1-p0, q1-q0]*[t1, t2]^T = q0 - p0
             # where self == Line(p0, p1) and other_seg == Line(q0, q1)
-            a = (self.start.real, self.end.real)
-            b = (self.start.imag, self.end.imag)
-            c = (other_seg.start.real, other_seg.end.real)
-            d = (other_seg.start.imag, other_seg.end.imag)
+            a = (self.start.x, self.end.x)
+            b = (self.start.y, self.end.y)
+            c = (other_seg.start.x, other_seg.end.x)
+            d = (other_seg.start.y, other_seg.end.y)
             denom = ((a[1] - a[0])*(d[0] - d[1]) -
                      (b[1] - b[0])*(c[0] - c[1]))
             if denom == 0:
@@ -602,10 +604,10 @@ class Line(object):
     def bbox(self):
         """returns the bounding box for the segment in the form
         (xmin, xmax, ymin, ymax)."""
-        xmin = min(self.start.real, self.end.real)
-        xmax = max(self.start.real, self.end.real)
-        ymin = min(self.start.imag, self.end.imag)
-        ymax = max(self.start.imag, self.end.imag)
+        xmin = min(self.start.x, self.end.x)
+        xmax = max(self.start.x, self.end.x)
+        ymin = min(self.start.y, self.end.y)
+        ymax = max(self.start.y, self.end.y)
         return xmin, xmax, ymin, ymax
 
     def cropped(self, t0, t1):
@@ -710,7 +712,7 @@ class QuadraticBezier(object):
                 return self._length_info['length']
         a = self.start - 2*self.control + self.end
         b = 2*(self.control - self.start)
-        a_dot_b = a.real*b.real + a.imag*b.imag
+        a_dot_b = a.x*b.x + a.y*b.y
 
         if abs(a) < 1e-12:
             s = abs(b)*(t1 - t0)
@@ -724,9 +726,9 @@ class QuadraticBezier(object):
                 return abs(a)*(t1**2 + t0**2) - abs(b)*(t1 + t0) + \
                     abs(b)**2/(2*abs(a))
         else:
-            c2 = 4*(a.real**2 + a.imag**2)
+            c2 = 4*(a.x**2 + a.y**2)
             c1 = 4*a_dot_b
-            c0 = b.real**2 + b.imag**2
+            c0 = b.x**2 + b.y**2
 
             beta = c1/(2*c2)
             gamma = c0/c2 - beta**2
@@ -1200,10 +1202,10 @@ class Arc(object):
         of the image and increases towards the bottom).
         """
         assert start != end
-        assert radius.real != 0 and radius.imag != 0
+        assert radius.x != 0 and radius.y != 0
 
         self.start = start
-        self.radius = abs(radius.real) + 1j*abs(radius.imag)
+        self.radius = abs(radius)
         self.rotation = rotation
         self.large_arc = bool(large_arc)
         self.sweep = bool(sweep)
@@ -1239,8 +1241,8 @@ class Arc(object):
     def _parameterize(self):
         # See http://www.w3.org/TR/SVG/implnote.html#ArcImplementationNotes
         # my notation roughly follows theirs
-        rx = self.radius.real
-        ry = self.radius.imag
+        rx = self.radius.x
+        ry = self.radius.y
         rx_sqd = rx*rx
         ry_sqd = ry*ry
 
@@ -1250,7 +1252,7 @@ class Arc(object):
         # between self.end and self.start lies on the origin and rotates
         # the ellipse so that the its axes align with the xy-coordinate axes.
         # Note:  This sends self.end to -self.start
-        zp1 = (1/self.rot_matrix)*(self.start - self.end)/2
+        zp1 = (1/self.rot_matrix)*complex(self.start - self.end)/2
         x1p, y1p = zp1.real, zp1.imag
         x1p_sqd = x1p*x1p
         y1p_sqd = y1p*y1p
@@ -1287,7 +1289,7 @@ class Arc(object):
             cp = radical*(rx*y1p/ry - 1j*ry*x1p/rx)
 
         # The center in (x,y) coordinates is easy to find knowing c'
-        self.center = exp(1j*self.phi)*cp + (self.start + self.end)/2
+        self.center = exp(1j*self.phi)*cp + complex(self.start + self.end)/2
 
         # Now we do a second transformation, from (x', y') to (u_x, u_y)
         # coordinates, which is a translation moving the center of the
@@ -1344,14 +1346,14 @@ class Arc(object):
         if t == 1:
             return self.end
         angle = radians(self.theta + t*self.delta)
-        cosphi = self.rot_matrix.real
-        sinphi = self.rot_matrix.imag
-        rx = self.radius.real
-        ry = self.radius.imag
+        cosphi = self.rot_matrix.x
+        sinphi = self.rot_matrix.y
+        rx = self.radius.x
+        ry = self.radius.y
 
         # z = self.rot_matrix*(rx*cos(angle) + 1j*ry*sin(angle)) + self.center
-        x = rx*cosphi*cos(angle) - ry*sinphi*sin(angle) + self.center.real
-        y = rx*sinphi*cos(angle) + ry*cosphi*sin(angle) + self.center.imag
+        x = rx*cosphi*cos(angle) - ry*sinphi*sin(angle) + self.center.x
+        y = rx*sinphi*cos(angle) + ry*cosphi*sin(angle) + self.center.y
         return complex(x, y)
 
     def centeriso(self, z):
@@ -1368,14 +1370,14 @@ class Arc(object):
         self._parameterize()) that sends self to the unit circle."""
         zeta = (1/self.rot_matrix)*(z - self.center)  # same as centeriso(z)
         x, y = real(zeta), imag(zeta)
-        return x/self.radius.real + 1j*y/self.radius.imag
+        return x/self.radius.x + 1j*y/self.radius.y
 
     def iu1transform(self, zeta):
         """This is an affine transformation, the inverse of
         self.u1transform()."""
         x = real(zeta)
         y = imag(zeta)
-        z = x*self.radius.real + y*self.radius.imag
+        z = x*self.radius.x + y*self.radius.y
         return self.rot_matrix*z + self.center
 
     def length(self, t0=0, t1=1, error=LENGTH_ERROR, min_depth=LENGTH_MIN_DEPTH):
@@ -1415,8 +1417,8 @@ class Arc(object):
         """returns the nth derivative of the segment at t."""
         angle = radians(self.theta + t*self.delta)
         phi = radians(self.rotation)
-        rx = self.radius.real
-        ry = self.radius.imag
+        rx = self.radius.x
+        ry = self.radius.y
         k = (self.delta*2*pi/360)**n  # ((d/dt)angle)**n
 
         if n % 4 == 0 and n > 0:
@@ -1452,7 +1454,7 @@ class Arc(object):
     #     """returns a list of t-values such that 0 <= t<= 1 and
     #     seg.curvature(t) = kappa."""
     #
-    #     a, b = self.radius.real, self.radius.imag
+    #     a, b = self.radius.x, self.radius.y
     #     if kappa > min(a, b)/max(a, b)**2 or kappa <= 0:
     #         return []
     #     if a==b:
@@ -1461,8 +1463,8 @@ class Arc(object):
     #         else:
     #             raise ValueError(
     #                 "The .icurvature() method for Arc elements with "
-    #                 "radius.real == radius.imag (i.e. circle segments) "
-    #                 "will raise this exception when kappa is 1/radius.real as "
+    #                 "radius.x == radius.y (i.e. circle segments) "
+    #                 "will raise this exception when kappa is 1/radius.x as "
     #                 "this is true at every point on the circle segment.")
     #
     #     # kappa = a*b / (a^2sin^2(tau) + b^2cos^2(tau))^(3/2), tau=2*pi*phase
@@ -1584,23 +1586,23 @@ class Arc(object):
             atan_x = 0
             atan_y = pi/2
         else:
-            rx, ry = self.radius.real, self.radius.imag
+            rx, ry = self.radius.x, self.radius.y
             atan_x = atan(-(ry/rx)*tan(self.phi))
             atan_y = atan((ry/rx)/tan(self.phi))
 
         def angle_inv(ang, k):  # inverse of angle from Arc.derivative()
             return ((ang + pi*k)*(360/(2*pi)) - self.theta)/self.delta
 
-        xtrema = [self.start.real, self.end.real]
-        ytrema = [self.start.imag, self.end.imag]
+        xtrema = [self.start.x, self.end.x]
+        ytrema = [self.start.y, self.end.y]
 
         for k in range(-4, 5):
             tx = angle_inv(atan_x, k)
             ty = angle_inv(atan_y, k)
             if 0 <= tx <= 1:
-                xtrema.append(self.point(tx).real)
+                xtrema.append(self.point(tx).x)
             if 0 <= ty <= 1:
-                ytrema.append(self.point(ty).imag)
+                ytrema.append(self.point(ty).y)
         xmin = max(xtrema)
         return min(xtrema), max(xtrema), min(ytrema), max(ytrema)
 
@@ -1634,12 +1636,12 @@ class Arc(object):
         # Transform to a coordinate system where the ellipse is centered
         # at the origin and its axes are horizontal/vertical
         zeta0 = self.centeriso(origin)
-        a, b = self.radius.real, self.radius.imag
-        x0, y0 = zeta0.real, zeta0.imag
+        a, b = self.radius.x, self.radius.y
+        x0, y0 = zeta0.x, zeta0.y
 
         # Find t s.t. z'(t)
         a2mb2 = (a**2 - b**2)
-        if u1orig.imag:  # x != x0
+        if u1orig.y:  # x != x0
 
             coeffs = [a2mb2**2,
                       2*a2mb2*b**2*y0,
@@ -1846,8 +1848,8 @@ class Path(MutableSequence):
     def isclosed(self):
         """This function determines if a connected path is closed."""
         assert len(self) != 0
-        assert self.iscontinuous()
-        return self.start == self.end
+        #assert self.iscontinuous() why assert here... 
+        return self.start == self.end and self.iscontinuous()
 
     def isclosedac(self):
         assert len(self) != 0
@@ -1929,36 +1931,36 @@ class Path(MutableSequence):
             # of a closed path, then we should start a new subpath here.
             if current_pos != seg_start or \
                     (self_closed and seg_start == end and use_closed_attrib):
-                parts.append('M {},{}'.format(seg_start.real, seg_start.imag))
+                parts.append('M {},{}'.format(seg_start.x, seg_start.y))
 
             if isinstance(segment, Line):
-                args = segment.end.real, segment.end.imag
+                args = segment.end.x, segment.end.y
                 parts.append('L {},{}'.format(*args))
             elif isinstance(segment, CubicBezier):
                 if useSandT and segment.is_smooth_from(previous_segment,
                                                        warning_on=False):
-                    args = (segment.control2.real, segment.control2.imag,
-                            segment.end.real, segment.end.imag)
+                    args = (segment.control2.x, segment.control2.y,
+                            segment.end.x, segment.end.y)
                     parts.append('S {},{} {},{}'.format(*args))
                 else:
-                    args = (segment.control1.real, segment.control1.imag,
-                            segment.control2.real, segment.control2.imag,
-                            segment.end.real, segment.end.imag)
+                    args = (segment.control1.x, segment.control1.y,
+                            segment.control2.x, segment.control2.y,
+                            segment.end.x, segment.end.y)
                     parts.append('C {},{} {},{} {},{}'.format(*args))
             elif isinstance(segment, QuadraticBezier):
                 if useSandT and segment.is_smooth_from(previous_segment,
                                                        warning_on=False):
-                    args = segment.end.real, segment.end.imag
+                    args = segment.end.x, segment.end.y
                     parts.append('T {},{}'.format(*args))
                 else:
-                    args = (segment.control.real, segment.control.imag,
-                            segment.end.real, segment.end.imag)
+                    args = (segment.control.x, segment.control.y,
+                            segment.end.x, segment.end.y)
                     parts.append('Q {},{} {},{}'.format(*args))
 
             elif isinstance(segment, Arc):
-                args = (segment.radius.real, segment.radius.imag,
+                args = (segment.radius.x, segment.radius.y,
                         segment.rotation,int(segment.large_arc),
-                        int(segment.sweep),segment.end.real, segment.end.imag)
+                        int(segment.sweep),segment.end.x, segment.end.y)
                 parts.append('A {},{} {} {:d},{:d} {},{}'.format(*args))
             current_pos = segment.end
             previous_segment = segment
@@ -2066,8 +2068,8 @@ class Path(MutableSequence):
                 return float('inf')
         dz = self.derivative(t)
         ddz = self.derivative(t, n=2)
-        dx, dy = dz.real, dz.imag
-        ddx, ddy = ddz.real, ddz.imag
+        dx, dy = dz.x, dz.y
+        ddx, ddy = ddz.x, ddz.y
         return abs(dx*ddy - dy*ddx)/(dx*dx + dy*dy)**1.5
 
     # def icurvature(self, kappa):
