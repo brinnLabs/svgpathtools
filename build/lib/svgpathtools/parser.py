@@ -9,7 +9,7 @@ import re
 
 # Internal dependencies
 from .path import Path, Line, QuadraticBezier, CubicBezier, Arc
-
+from .point import *
 
 COMMANDS = set('MmZzLlHhVvCcSsQqTtAa')
 UPPERCASE = set('MZLHVCSQTA')
@@ -26,7 +26,7 @@ def _tokenize_path(pathdef):
             yield token
 
 
-def parse_path(pathdef, current_pos=0j):
+def parse_path(pathdef, current_pos=Point(0,0)):
     # In the SVG specs, initial movetos are absolute, even if
     # specified as 'm'. This is the default behavior here as well.
     # But if you pass in a current_pos variable, the initial moveto
@@ -58,7 +58,7 @@ def parse_path(pathdef, current_pos=0j):
             # Moveto command.
             x = elements.pop()
             y = elements.pop()
-            pos = float(x) + float(y) * 1j
+            pos = Point(float(x), float(y))
             if absolute:
                 current_pos = pos
             else:
@@ -86,7 +86,7 @@ def parse_path(pathdef, current_pos=0j):
         elif command == 'L':
             x = elements.pop()
             y = elements.pop()
-            pos = float(x) + float(y) * 1j
+            pos = Point(float(x), float(y))
             if not absolute:
                 pos += current_pos
             segments.append(Line(current_pos, pos))
@@ -94,24 +94,24 @@ def parse_path(pathdef, current_pos=0j):
 
         elif command == 'H':
             x = elements.pop()
-            pos = float(x) + current_pos.imag * 1j
+            pos = Point(float(x), current_pos.y)
             if not absolute:
-                pos += current_pos.real
+                pos.x += current_pos.x
             segments.append(Line(current_pos, pos))
             current_pos = pos
 
         elif command == 'V':
             y = elements.pop()
-            pos = current_pos.real + float(y) * 1j
+            pos = Point(current_pos.x, float(y))
             if not absolute:
-                pos += current_pos.imag * 1j
+                pos.y += current_pos.y
             segments.append(Line(current_pos, pos))
             current_pos = pos
 
         elif command == 'C':
-            control1 = float(elements.pop()) + float(elements.pop()) * 1j
-            control2 = float(elements.pop()) + float(elements.pop()) * 1j
-            end = float(elements.pop()) + float(elements.pop()) * 1j
+            control1 = Point(float(elements.pop()), float(elements.pop()))
+            control2 = Point(float(elements.pop()), float(elements.pop()))
+            end = Point(float(elements.pop()), float(elements.pop()))
 
             if not absolute:
                 control1 += current_pos
@@ -136,8 +136,8 @@ def parse_path(pathdef, current_pos=0j):
                 # to the current point.
                 control1 = current_pos + current_pos - segments[-1].control2
 
-            control2 = float(elements.pop()) + float(elements.pop()) * 1j
-            end = float(elements.pop()) + float(elements.pop()) * 1j
+            control2 = Point(float(elements.pop()), float(elements.pop()))
+            end = Point(float(elements.pop()), float(elements.pop()))
 
             if not absolute:
                 control2 += current_pos
@@ -147,8 +147,8 @@ def parse_path(pathdef, current_pos=0j):
             current_pos = end
 
         elif command == 'Q':
-            control = float(elements.pop()) + float(elements.pop()) * 1j
-            end = float(elements.pop()) + float(elements.pop()) * 1j
+            control = Point(float(elements.pop()), float(elements.pop()))
+            end = Point(float(elements.pop()), float(elements.pop()))
 
             if not absolute:
                 control += current_pos
@@ -172,7 +172,7 @@ def parse_path(pathdef, current_pos=0j):
                 # to the current point.
                 control = current_pos + current_pos - segments[-1].control
 
-            end = float(elements.pop()) + float(elements.pop()) * 1j
+            end = Point(float(elements.pop()), float(elements.pop()))
 
             if not absolute:
                 end += current_pos
@@ -181,11 +181,11 @@ def parse_path(pathdef, current_pos=0j):
             current_pos = end
 
         elif command == 'A':
-            radius = float(elements.pop()) + float(elements.pop()) * 1j
+            radius = Point(float(elements.pop()), float(elements.pop()))
             rotation = float(elements.pop())
             arc = float(elements.pop())
             sweep = float(elements.pop())
-            end = float(elements.pop()) + float(elements.pop()) * 1j
+            end = Point(float(elements.pop()), float(elements.pop()))
 
             if not absolute:
                 end += current_pos
